@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTasks } from "@/contexts/TaskContext";
 import { Target, TrendingUp, Calendar, Award, Zap } from "lucide-react";
+import { useBackButton } from "@/hooks/use-back-button";
 
 interface GoalTrackerProps {
   onClose: () => void;
@@ -11,6 +12,15 @@ export const GoalTracker = ({ onClose }: GoalTrackerProps) => {
   const { profile } = useAuth();
   const { tasks, getTaskStats } = useTasks();
   const stats = getTaskStats();
+
+  // Handle back button
+  useBackButton({
+    onBack: () => {
+      onClose();
+      return true;
+    },
+    priority: 20,
+  });
 
   // Calculate days until target (assuming exam/goal is in 6 months if not specified)
   const targetDate = new Date();
@@ -50,8 +60,8 @@ export const GoalTracker = ({ onClose }: GoalTrackerProps) => {
   const momentum = previous7Days > 0 ? Math.round(((last7Days - previous7Days) / previous7Days) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-24">
-      <div className="max-w-lg mx-auto p-4">
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <div className="max-w-lg mx-auto px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 animate-slide-in-right">
           <button

@@ -1,199 +1,186 @@
-# TaskFlow - Beautiful Task Management App
+# TaskFlow - Intelligent Task Management App
 
-A modern, feature-rich task management application built with React, TypeScript, and Supabase. Now available as a native Android app!
+A modern, AI-powered task management application built with React, TypeScript, and Supabase. Available as both a web app and native Android app with Firebase Hosting and cloud synchronization.
+
+## 🌟 Features
+
+### � WSmart Task Management
+- Create tasks with progress counters and priorities
+- Set recurrence patterns and track completion history
+- Category-based organization with custom icons
+- Real-time cloud synchronization across devices
+
+### 🤖 AI-Powered Step Up System
+TaskFlow features an intelligent "Step Up" system powered by Google Gemini AI:
+- **Smart Analysis**: Analyzes completion patterns, streaks, and progress
+- **Personalized Suggestions**: Considers your profile and goals for contextual recommendations
+- **Gradual Growth**: Suggests 10-25% goal increases when you're ready
+- **Minimal Design**: Non-intrusive suggestions that appear when appropriate
+
+### 📊 Advanced Analytics
+- Interactive heat map visualization of task completion
+- Category-based statistics and insights
+- Streak tracking and progress monitoring
+- Goal achievement analytics
+
+### 🎨 Beautiful Material 3 Design
+- Dark/Light mode support with system preference detection
+- Multiple color themes (Purple, Blue, Green, Orange, Pink)
+- Smooth animations and haptic feedback
+- Mobile-first responsive design
+
+### 👤 Personalized Experience
+- User profiles with target exams or goals
+- Personal objectives and notes
+- AI-driven contextual suggestions
+
+## 🚀 Live Demo
+
+**Web App**: [https://task-flow30.web.app](https://task-flow30.web.app)
 
 ## 📱 Platforms
 
 - 🌐 **Web App** - Progressive Web App with offline support
 - 🤖 **Android App** - Native Android app built with Capacitor
+- ☁️ **Firebase Hosting** - Fast, global CDN delivery
 
-## Project info
+## 🛠️ Tech Stack
 
-**URL**: https://lovable.dev/projects/8c5955fc-7c56-4745-a12f-794385f52b40
+- **Frontend**: React 18, TypeScript, Vite
+- **UI**: shadcn/ui, Tailwind CSS, Radix UI
+- **Backend**: Supabase (Database, Auth, Edge Functions)
+- **Hosting**: Firebase Hosting
+- **Mobile**: Capacitor for Android
+- **AI**: Google Gemini API
+- **Analytics**: Recharts for data visualization
 
-## How can I edit this code?
+## 🏗️ Setup & Installation
 
-There are several ways of editing your application.
+### Prerequisites
+- Node.js 16+ and npm
+- Supabase account
+- Firebase account
+- Google AI Studio API key
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/8c5955fc-7c56-4745-a12f-794385f52b40) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-- Supabase (Backend & Edge Functions)
-- Google Gemini AI (Step Up Analysis)
-
-## Features
-
-### 🎯 Smart Task Management
-- Create tasks with progress counters
-- Set priorities and recurrence patterns
-- Track completion history
-- Category-based organization
-
-### 🚀 Intelligent Step Up System
-The app features an AI-powered "Step Up" system that automatically suggests goal increases when you're ready:
-
-- **Minimal Design**: No intrusive buttons - suggestions appear as a small icon next to tasks
-- **AI Analysis**: Uses Google Gemini to analyze your completion patterns, streaks, and progress
-- **Personalized**: Considers your profile (target exam/goal) and task notes
-- **Smart Timing**: Only suggests increases after 7+ days of consistent completion (75%+ rate)
-- **Gradual Growth**: Recommends 10-25% increases to avoid overwhelming you
-
-See [STEP_UP_FEATURE.md](./STEP_UP_FEATURE.md) for detailed documentation.
-
-### 📊 Analytics & Insights
-- Heat map visualization of task completion
-- Category-based statistics
-- Streak tracking
-- Progress monitoring
-
-### 🎨 Beautiful Material 3 Design
-- Dark/Light mode support
-- Multiple color themes (Purple, Blue, Green, Orange, Pink)
-- Smooth animations and transitions
-- Mobile-first responsive design
-
-### 👤 User Profile
-- Set target exams or goals
-- Add personal objectives
-- AI uses this for contextual suggestions
-
-## Setup
-
-### 1. Install Dependencies
-```sh
+### 1. Clone Repository
+```bash
+git clone https://github.com/yourusername/taskflow.git
+cd taskflow
 npm install
 ```
 
-### 2. Configure Supabase
-Create a `.env` file with your Supabase credentials:
-```
+### 2. Environment Configuration
+Create a `.env` file:
+```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### 3. Deploy Edge Functions
-```sh
+### 3. Database Setup
+```bash
+# Run Supabase migrations
+supabase db reset
+
+# Deploy Edge Functions
 supabase functions deploy analyze-step-up
 supabase functions deploy check-step-up-suggestions
 ```
 
-### 4. Add Gemini API Key
-1. Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Open the app and go to Settings
-3. Add your API key in the "Gemini API Key" section
-
-### 5. Run Development Server
-```sh
+### 4. Development Server
+```bash
 npm run dev
 ```
 
-## How can I deploy this project?
+### 5. Configure AI Features
+1. Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
+2. Open the app → Settings → Add your Gemini API key
 
-Simply open [Lovable](https://lovable.dev/projects/8c5955fc-7c56-4745-a12f-794385f52b40) and click on Share -> Publish.
+## 🚀 Deployment
 
-## Can I connect a custom domain to my Lovable project?
+### Web Deployment (Firebase Hosting)
+```bash
+# Build and deploy to Firebase
+npm run deploy
 
-Yes, you can!
+# Deploy to preview channel
+npm run deploy:preview
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
-
-## 🤖 Android App
-
-TaskFlow is now available as a native Android app built with Capacitor!
-
-### Quick Start
-
+### Android App
 ```bash
 # Build and open in Android Studio
 npm run android:build
 npm run android:open
 
-# Or build and run directly
+# Build and run directly
 npm run android:run
 ```
 
-### Features
+## 📱 Android App Features
 
-- ✅ Native Android performance
-- ✅ Haptic feedback (vibration)
-- ✅ Offline support
-- ✅ Cloud sync with Supabase
+- ✅ Native Android performance with Capacitor
+- ✅ Haptic feedback and native UI elements
+- ✅ Offline support with cloud sync
+- ✅ Material Design 3 compliance
 - ✅ All web features included
-- ✅ Material Design UI
-- ✅ Dark mode support
+- ✅ Google Play Store ready
 
-### Documentation
-
-- **[ANDROID_QUICK_START.md](./ANDROID_QUICK_START.md)** - Quick reference for common commands
-- **[ANDROID_SETUP_GUIDE.md](./ANDROID_SETUP_GUIDE.md)** - Complete setup instructions
-- **[ANDROID_README.md](./ANDROID_README.md)** - Full Android app documentation
-- **[ANDROID_DEPLOYMENT.md](./ANDROID_DEPLOYMENT.md)** - Google Play Store deployment guide
-
-### Requirements
-
-- Node.js 16+
+### Android Requirements
 - Android Studio (latest)
 - JDK 11+
-- Android SDK
+- Android SDK API 24+
 
-### Building for Production
+## 🔧 Available Scripts
 
-See [ANDROID_DEPLOYMENT.md](./ANDROID_DEPLOYMENT.md) for complete instructions on:
-- Creating signed APKs
-- Building app bundles
-- Publishing to Google Play Store
-- Testing and optimization
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run preview      # Preview production build
+npm run deploy       # Build and deploy to Firebase
+npm run android:build # Build Android app
+npm run android:open  # Open in Android Studio
+npm run android:run   # Build and run Android app
+```
+
+## 🏗️ Project Structure
+
+```
+taskflow/
+├── src/
+│   ├── components/     # React components
+│   ├── pages/         # Page components
+│   ├── hooks/         # Custom React hooks
+│   ├── lib/           # Utility functions
+│   ├── contexts/      # React contexts
+│   └── integrations/  # External service integrations
+├── supabase/
+│   ├── functions/     # Edge functions
+│   └── migrations/    # Database migrations
+├── android/           # Android app files
+├── firebase.json      # Firebase configuration
+└── capacitor.config.ts # Capacitor configuration
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [React](https://reactjs.org/) and [TypeScript](https://www.typescriptlang.org/)
+- UI components from [shadcn/ui](https://ui.shadcn.com/)
+- Backend powered by [Supabase](https://supabase.com/)
+- Hosted on [Firebase](https://firebase.google.com/)
+- AI features by [Google Gemini](https://ai.google.dev/)
 
 ---
 
-Built with ❤️ using React, TypeScript, Capacitor, and Supabase
+**TaskFlow** - Intelligent task management for achieving your goals 🎯

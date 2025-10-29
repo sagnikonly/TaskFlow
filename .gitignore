@@ -41,3 +41,7 @@ android/key.properties
 ios/App/Pods/
 ios/App/build/
 ios/App/App.xcworkspace/xcuserdata/
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log

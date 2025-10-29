@@ -9,6 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "deploy": "npm run build && npx firebase deploy --only hosting",
+    "deploy:preview": "npm run build && npx firebase hosting:channel:deploy preview",
     "android:build": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
     "android:run": "npm run android:build && npx cap run android"
@@ -83,8 +85,8 @@
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
+    "firebase-tools": "^14.22.0",
     "globals": "^15.15.0",
-    "lovable-tagger": "^1.1.11",
     "postcss": "^8.5.6",
     "supabase": "^2.54.11",
     "tailwindcss": "^3.4.17",

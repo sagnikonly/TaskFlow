@@ -109,9 +109,9 @@ All colors MUST be HSL.
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     overscroll-behavior-y: contain;
-    /* Proper safe areas for status bar and navigation bar */
-    padding-top: max(env(safe-area-inset-top), 8px);
-    padding-bottom: max(env(safe-area-inset-bottom), 16px);
+    /* Remove default padding - handled per component for better control */
+    padding: 0;
+    margin: 0;
   }
 
   /* Ensure root container fills viewport */

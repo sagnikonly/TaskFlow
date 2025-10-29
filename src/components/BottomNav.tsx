@@ -12,7 +12,7 @@ export const BottomNav = () => {
   const { haptic } = useHaptics();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-surface dark:bg-surface border-t border-border/50 z-30 max-w-lg mx-auto">
+    <nav className="fixed bottom-0 left-0 right-0 bg-surface dark:bg-surface border-t border-border/50 z-30 max-w-lg mx-auto pb-[env(safe-area-inset-bottom)]">
       <div className="flex justify-around items-center h-16 px-2">
         {navItems.map((item) => (
           <NavLink

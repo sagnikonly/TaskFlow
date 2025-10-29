@@ -37,6 +37,7 @@ interface TaskContextType {
   deleteTask: (id: string) => void;
   toggleTask: (id: string) => void;
   incrementTask: (id: string) => void;
+  importTasks: (importedTasks: Task[], mergeMode: "replace" | "merge") => Promise<void>;
   categories: string[];
   categoryIcons: { [key: string]: string };
   addCategory: (category: string, icon?: string) => void;
@@ -69,14 +70,19 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const initializeData = async () => {
       if (!user) {
         // Load from localStorage if not logged in
+        console.log("👤 No user logged in, loading from localStorage");
         const saved = localStorage.getItem("tasks");
         if (saved) {
           const parsed = JSON.parse(saved);
-          setTasks(parsed.map((t: any) => ({
+          const loadedTasks = parsed.map((t: any) => ({
             ...t,
             createdAt: new Date(t.createdAt),
             completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
-          })));
+          }));
+          setTasks(loadedTasks);
+          console.log(`📦 Loaded ${loadedTasks.length} tasks from localStorage`);
+        } else {
+          console.log("📦 No tasks found in localStorage");
         }
         
         const savedCategories = localStorage.getItem("categories");
@@ -96,42 +102,86 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       try {
         setIsLoading(true);
         
-        // Migrate local data to cloud if needed
-        await syncService.migrateLocalDataToCloud(user.id);
-        
-        // Sync from cloud
-        const [cloudTasks, cloudCategories] = await Promise.all([
-          syncService.syncTasksFromCloud(user.id),
-          syncService.syncCategoriesFromCloud(user.id),
-        ]);
-
-        setTasks(cloudTasks);
-        setCategories(cloudCategories.categories);
-        setCategoryIcons(cloudCategories.icons);
-        
-        console.log("✅ Data synced from cloud successfully");
-      } catch (error: any) {
-        console.error("Error initializing data:", error);
-        
-        // Check if it's a table not found error
-        const errorMessage = error?.message || String(error);
-        if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
-          console.warn("⚠️ Database tables not created yet. Please run: supabase db push");
-          toast.error("Database not set up", {
-            description: "Contact support if this persists",
-            duration: 5000,
-          });
-        } else if (errorMessage.includes('JWT') || errorMessage.includes('auth')) {
-          toast.error("Authentication issue", {
-            description: "Please try signing in again",
-            duration: 3000,
-          });
+        // First, load from localStorage immediately for faster UI
+        console.log("👤 User logged in, loading from localStorage first...");
+        const saved = localStorage.getItem("tasks");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const loadedTasks = parsed.map((t: any) => ({
+            ...t,
+            createdAt: new Date(t.createdAt),
+            completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
+          }));
+          setTasks(loadedTasks);
+          console.log(`📦 Loaded ${loadedTasks.length} tasks from localStorage`);
         } else {
-          toast.error("Failed to sync from cloud", {
-            description: "Using local storage instead",
-            duration: 3000,
-          });
+          console.log("📦 No tasks in localStorage");
         }
+        
+        const savedCategories = localStorage.getItem("categories");
+        if (savedCategories) {
+          setCategories(JSON.parse(savedCategories));
+        }
+        
+        const savedIcons = localStorage.getItem("categoryIcons");
+        if (savedIcons) {
+          setCategoryIcons(JSON.parse(savedIcons));
+        }
+        
+        // Then sync with cloud in the background
+        try {
+          // Migrate local data to cloud if needed
+          await syncService.migrateLocalDataToCloud(user.id);
+          
+          // Sync from cloud
+          const [cloudTasks, cloudCategories] = await Promise.all([
+            syncService.syncTasksFromCloud(user.id),
+            syncService.syncCategoriesFromCloud(user.id),
+          ]);
+
+          setTasks(cloudTasks);
+          setCategories(cloudCategories.categories);
+          setCategoryIcons(cloudCategories.icons);
+          
+          console.log(`✅ Data synced from cloud successfully (${cloudTasks.length} tasks)`);
+        } catch (cloudError: any) {
+          console.error("⚠️ Cloud sync failed, using local data:", cloudError);
+          
+          // Check if it's a table not found error
+          const errorMessage = cloudError?.message || String(cloudError);
+          if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+            console.warn("⚠️ Database tables not created yet");
+            toast.error("Database not set up", {
+              description: "Using local storage. Contact support if this persists.",
+              duration: 5000,
+            });
+          } else if (errorMessage.includes('JWT') || errorMessage.includes('auth')) {
+            toast.error("Authentication issue", {
+              description: "Using local storage. Try signing in again.",
+              duration: 3000,
+            });
+          } else {
+            toast.error("Cloud sync failed", {
+              description: "Using local storage instead",
+              duration: 3000,
+            });
+          }
+          
+          // Keep the localStorage data we already loaded
+          // If no localStorage data, set defaults
+          if (!saved) {
+            setCategories(["Work", "Health", "Personal Growth", "Shopping", "Fitness"]);
+            setCategoryIcons({
+              "Work": "work",
+              "Health": "favorite",
+              "Personal Growth": "auto_stories",
+              "Shopping": "shopping_cart",
+              "Fitness": "fitness_center",
+            });
+          }
+        }
+      } catch (error: any) {
+        console.error("❌ Error initializing data:", error);
         
         // Fall back to localStorage
         const saved = localStorage.getItem("tasks");
@@ -214,19 +264,20 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   // Backup to localStorage (offline support)
   useEffect(() => {
-    if (!isLoading && tasks.length > 0) {
+    if (!isLoading) {
       localStorage.setItem("tasks", JSON.stringify(tasks));
+      console.log(`💾 Saved ${tasks.length} tasks to localStorage`);
     }
   }, [tasks, isLoading]);
 
   useEffect(() => {
-    if (!isLoading && categories.length > 0) {
+    if (!isLoading) {
       localStorage.setItem("categories", JSON.stringify(categories));
     }
   }, [categories, isLoading]);
 
   useEffect(() => {
-    if (!isLoading && Object.keys(categoryIcons).length > 0) {
+    if (!isLoading) {
       localStorage.setItem("categoryIcons", JSON.stringify(categoryIcons));
     }
   }, [categoryIcons, isLoading]);
@@ -279,9 +330,12 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addTask = async (task: Omit<Task, "id" | "createdAt">) => {
+    // Generate a unique ID for the task (UUID format for cloud compatibility)
+    const taskId = crypto.randomUUID();
+    
     const newTask: Task = {
       ...task,
-      id: Date.now().toString(),
+      id: taskId,
       createdAt: new Date(),
       completionHistory: task.completionHistory || [],
       recurrence: task.recurrence || "none",
@@ -293,9 +347,12 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (user) {
       try {
         await syncService.addTaskToCloud(newTask, user.id);
+        console.log("✅ Task synced to cloud successfully");
       } catch (error) {
-        console.error("Error syncing new task to cloud:", error);
-        toast.error("Failed to sync task to cloud");
+        console.error("❌ Error syncing new task to cloud:", error);
+        toast.error("Failed to sync task to cloud", {
+          description: "Task saved locally only",
+        });
       }
     }
   };
@@ -328,51 +385,139 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const toggleTask = (id: string) => {
+  const toggleTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    const newCompleted = !task.completed;
+    const today = new Date().toISOString().split("T")[0];
+    const newHistory = [
+      ...(task.completionHistory || []),
+      { date: today, completed: newCompleted }
+    ];
+    
+    const updates = {
+      completed: newCompleted,
+      completedAt: newCompleted ? new Date() : undefined,
+      completionHistory: newHistory,
+    };
+
     setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id === id) {
-          const newCompleted = !task.completed;
-          const today = new Date().toISOString().split("T")[0];
-          const newHistory = [
-            ...(task.completionHistory || []),
-            { date: today, completed: newCompleted }
-          ];
-          return {
-            ...task,
-            completed: newCompleted,
-            completedAt: newCompleted ? new Date() : undefined,
-            completionHistory: newHistory,
-          };
-        }
-        return task;
-      })
+      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
+    
+    // Sync to cloud if user is logged in
+    if (user) {
+      try {
+        await syncService.updateTaskInCloud(id, updates, user.id);
+      } catch (error) {
+        console.error("Error syncing task toggle to cloud:", error);
+      }
+    }
   };
 
-  const incrementTask = (id: string) => {
+  const incrementTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task || !task.count) return;
+
+    const newCurrent = Math.min(task.count.current + 1, task.count.total);
+    const isComplete = newCurrent === task.count.total;
+    const today = new Date().toISOString().split("T")[0];
+    const newHistory = isComplete ? [
+      ...(task.completionHistory || []),
+      { date: today, completed: true }
+    ] : task.completionHistory;
+    
+    const updates = {
+      count: { ...task.count, current: newCurrent },
+      completed: isComplete,
+      completedAt: isComplete ? new Date() : task.completedAt,
+      completionHistory: newHistory,
+    };
+
     setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id === id && task.count) {
-          const newCurrent = Math.min(task.count.current + 1, task.count.total);
-          const isComplete = newCurrent === task.count.total;
-          const today = new Date().toISOString().split("T")[0];
-          const newHistory = isComplete ? [
-            ...(task.completionHistory || []),
-            { date: today, completed: true }
-          ] : task.completionHistory;
-          
-          return {
-            ...task,
-            count: { ...task.count, current: newCurrent },
-            completed: isComplete,
-            completedAt: isComplete ? new Date() : task.completedAt,
-            completionHistory: newHistory,
-          };
-        }
-        return task;
-      })
+      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
+    
+    // Sync to cloud if user is logged in
+    if (user) {
+      try {
+        await syncService.updateTaskInCloud(id, updates, user.id);
+      } catch (error) {
+        console.error("Error syncing task increment to cloud:", error);
+      }
+    }
+  };
+
+  const importTasks = async (importedTasks: Task[], mergeMode: "replace" | "merge") => {
+    try {
+      // Validate and normalize imported tasks
+      const normalizedTasks = importedTasks.map(task => ({
+        ...task,
+        createdAt: task.createdAt ? new Date(task.createdAt) : new Date(),
+        completedAt: task.completedAt ? new Date(task.completedAt) : undefined,
+        completionHistory: task.completionHistory || [],
+        stepUpHistory: task.stepUpHistory || [],
+        recurrence: task.recurrence || "none",
+      }));
+
+      // Extract unique categories from imported tasks
+      const importedCategories = [...new Set(normalizedTasks.map(t => t.category))];
+      
+      if (mergeMode === "replace") {
+        // Replace all tasks
+        setTasks(normalizedTasks);
+        
+        // Update categories
+        const newCategories = [...new Set([...categories, ...importedCategories])];
+        setCategories(newCategories);
+        
+        // Sync to cloud if user is logged in
+        if (user) {
+          // Delete all existing tasks
+          for (const task of tasks) {
+            await syncService.deleteTaskFromCloud(task.id, user.id);
+          }
+          // Add all imported tasks
+          for (const task of normalizedTasks) {
+            await syncService.addTaskToCloud(task, user.id);
+          }
+        }
+      } else {
+        // Merge mode: add tasks that don't exist, update existing ones
+        const existingIds = new Set(tasks.map(t => t.id));
+        const tasksToAdd = normalizedTasks.filter(t => !existingIds.has(t.id));
+        const tasksToUpdate = normalizedTasks.filter(t => existingIds.has(t.id));
+        
+        setTasks(prev => {
+          const updated = prev.map(task => {
+            const importedTask = tasksToUpdate.find(t => t.id === task.id);
+            return importedTask || task;
+          });
+          return [...updated, ...tasksToAdd];
+        });
+        
+        // Update categories
+        const newCategories = [...new Set([...categories, ...importedCategories])];
+        setCategories(newCategories);
+        
+        // Sync to cloud if user is logged in
+        if (user) {
+          for (const task of tasksToAdd) {
+            await syncService.addTaskToCloud(task, user.id);
+          }
+          for (const task of tasksToUpdate) {
+            await syncService.updateTaskInCloud(task.id, task, user.id);
+          }
+        }
+      }
+      
+      toast.success(`Successfully imported ${normalizedTasks.length} tasks!`);
+    } catch (error) {
+      console.error("Error importing tasks:", error);
+      toast.error("Failed to import tasks");
+      throw error;
+    }
   };
 
   const addCategory = async (category: string, icon: string = "label") => {
@@ -496,6 +641,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         deleteTask,
         toggleTask,
         incrementTask,
+        importTasks,
         categories,
         categoryIcons,
         addCategory,

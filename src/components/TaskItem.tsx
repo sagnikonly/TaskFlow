@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "./ui/button";
 import StepUpIndicator from "./StepUpIndicator";
 import { TaskEditDialog } from "./TaskEditDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { useHaptics } from "@/hooks/use-haptics";
 import { createConfettiFromElement } from "@/lib/confetti";
 
@@ -33,6 +34,7 @@ export const TaskItem = ({
   const [isChecked, setIsChecked] = useState(completed);
   const [showDelete, setShowDelete] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const { haptic } = useHaptics();
   const checkboxRef = useRef<HTMLLabelElement>(null);
 
@@ -55,10 +57,13 @@ export const TaskItem = ({
   };
 
   const handleDelete = () => {
+    haptic('light');
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
     haptic('error');
-    if (window.confirm(`Delete "${title}"?`)) {
-      onDelete?.(id);
-    }
+    onDelete?.(id);
   };
 
   const handleTaskClick = (e: React.MouseEvent) => {
@@ -168,6 +173,17 @@ export const TaskItem = ({
       open={editDialogOpen}
       onOpenChange={setEditDialogOpen}
       task={task}
+    />
+
+    <ConfirmDialog
+      open={deleteDialogOpen}
+      onOpenChange={setDeleteDialogOpen}
+      title="Delete Task?"
+      description={`Are you sure you want to delete "${title}"? This action cannot be undone.`}
+      confirmText="Delete"
+      cancelText="Cancel"
+      onConfirm={confirmDelete}
+      variant="destructive"
     />
   </>
   );

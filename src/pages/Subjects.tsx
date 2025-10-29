@@ -1,12 +1,17 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTasks } from "@/contexts/TaskContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IconPicker } from "@/components/IconPicker";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FloatingActionButton } from "@/components/FloatingActionButton";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { useBackButton } from "@/hooks/use-back-button";
+import { useHaptics } from "@/hooks/use-haptics";
 
 const categoryIcons: Record<string, string> = {
   Work: "work",
@@ -28,12 +33,25 @@ const categoryColors = [
 ];
 
 const Subjects = () => {
+  const navigate = useNavigate();
   const { categories, addCategory, removeCategory, updateCategoryIcon, categoryIcons, tasks } = useTasks();
+  const { haptic } = useHaptics();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newIcon, setNewIcon] = useState("label");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<{ name: string; taskCount: number } | null>(null);
+
+  // Handle back button - go to home
+  useBackButton({
+    onBack: () => {
+      navigate('/');
+      return true;
+    },
+    priority: 10,
+  });
 
   const getCategoryStats = (category: string) => {
     const categoryTasks = tasks.filter((t) => t.category === category);
@@ -47,15 +65,18 @@ const Subjects = () => {
 
   const handleAddCategory = () => {
     if (!newCategory.trim()) {
+      haptic('error');
       toast.error("Please enter a category name");
       return;
     }
 
     if (categories.includes(newCategory.trim())) {
+      haptic('error');
       toast.error("Category already exists");
       return;
     }
 
+    haptic('success');
     addCategory(newCategory.trim(), newIcon);
     toast.success("Category added successfully!");
     setNewCategory("");
@@ -65,96 +86,124 @@ const Subjects = () => {
 
   const handleRemoveCategory = (category: string) => {
     const stats = getCategoryStats(category);
-    if (stats.total > 0) {
-      const confirmed = window.confirm(
-        `This category has ${stats.total} task(s). Deleting it will also delete all associated tasks. Continue?`
-      );
-      if (!confirmed) return;
+    haptic('light');
+    setCategoryToDelete({ name: category, taskCount: stats.total });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (categoryToDelete) {
+      haptic('error');
+      removeCategory(categoryToDelete.name);
+      toast.success("Category removed");
+      setCategoryToDelete(null);
     }
-    removeCategory(category);
-    toast.success("Category removed");
   };
 
   return (
-    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-24 p-4 animate-fade-in">
+    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] animate-fade-in">
       <header className="mb-6 animate-slide-in-right" style={{ animationDelay: "0.1s", animationFillMode: "both" }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary text-4xl">category</span>
-            <h1 className="text-foreground text-3xl font-extrabold">Subjects</h1>
-          </div>
-          <Button
-            onClick={() => setAddDialogOpen(true)}
-            className="rounded-full w-12 h-12 p-0"
-          >
-            <span className="material-symbols-outlined text-2xl">add</span>
-          </Button>
+        <div className="flex items-center gap-3 mb-2">
+          <span className="material-symbols-outlined text-primary text-4xl">category</span>
+          <h1 className="text-foreground text-3xl font-extrabold">Subjects</h1>
         </div>
         <p className="text-muted-foreground">Manage your task categories</p>
       </header>
 
-      <div className="space-y-3">
-        {categories.map((category, index) => {
-          const stats = getCategoryStats(category);
-          const colorClass = categoryColors[index % categoryColors.length];
-          const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+      {categories.length === 0 ? (
+        /* Empty State */
+        <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 animate-fade-in">
+          <div className="mb-6">
+            <div className="bg-primary/10 dark:bg-primary/20 rounded-full p-8">
+              <span className="material-symbols-outlined text-primary text-7xl">
+                category
+              </span>
+            </div>
+          </div>
 
-          return (
-            <Card
-              key={category}
-              className={`bg-gradient-to-br ${colorClass} p-5 rounded-3xl animate-slide-in-right hover:scale-[1.02] transition-all duration-300`}
-              style={{ animationDelay: `${0.1 * (index + 2)}s`, animationFillMode: "both" }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  <button
-                    onClick={() => {
-                      setSelectedCategory(category);
-                      setIconPickerOpen(true);
-                    }}
-                    className="bg-primary/10 p-3 rounded-2xl hover:bg-primary/20 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-primary text-3xl">
-                      {categoryIcons[category] || "label"}
-                    </span>
-                  </button>
-                  
-                  <div className="flex-1">
-                    <h3 className="text-foreground text-lg font-bold mb-1">{category}</h3>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                      <span>{stats.total} tasks</span>
-                      <span>•</span>
-                      <span>{completionRate}% complete</span>
-                    </div>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            No subjects yet
+          </h2>
+          <p className="text-sm text-muted-foreground mb-8 text-center">
+            Tap the + button to create your first subject
+          </p>
+
+          <button
+            onClick={() => {
+              haptic('light');
+              setAddDialogOpen(true);
+            }}
+            className="flex items-center gap-2 text-primary font-medium"
+          >
+            <span className="material-symbols-outlined">add_circle</span>
+            <span>Add Subject</span>
+          </button>
+        </div>
+      ) : (
+        /* Categories List */
+        <div className="space-y-3">
+          {categories.map((category, index) => {
+            const stats = getCategoryStats(category);
+            const colorClass = categoryColors[index % categoryColors.length];
+            const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+            return (
+              <Card
+                key={category}
+                className={`bg-gradient-to-br ${colorClass} p-5 rounded-3xl animate-slide-in-right hover:scale-[1.02] transition-all duration-300`}
+                style={{ animationDelay: `${0.1 * (index + 2)}s`, animationFillMode: "both" }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4 flex-1">
+                    <button
+                      onClick={() => {
+                        setSelectedCategory(category);
+                        setIconPickerOpen(true);
+                      }}
+                      className="bg-primary/10 p-3 rounded-2xl hover:bg-primary/20 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-primary text-3xl">
+                        {categoryIcons[category] || "label"}
+                      </span>
+                    </button>
                     
-                    {/* Progress Bar */}
-                    {stats.total > 0 && (
-                      <div className="w-full bg-background/50 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full transition-all duration-500"
-                          style={{ width: `${completionRate}%` }}
-                        />
+                    <div className="flex-1">
+                      <h3 className="text-foreground text-lg font-bold mb-1">{category}</h3>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                        <span>{stats.total} tasks</span>
+                        <span>•</span>
+                        <span>{completionRate}% complete</span>
                       </div>
-                    )}
+                      
+                      {/* Progress Bar */}
+                      {stats.total > 0 && (
+                        <div className="w-full bg-background/50 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all duration-500"
+                            style={{ width: `${completionRate}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemoveCategory(category)}
-                  className="text-muted-foreground hover:text-destructive rounded-full"
-                >
-                  <span className="material-symbols-outlined text-xl">delete</span>
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveCategory(category)}
+                    className="text-muted-foreground hover:text-destructive rounded-full"
+                  >
+                    <span className="material-symbols-outlined text-xl">delete</span>
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="bg-surface dark:bg-surface border-border max-w-md mx-4 rounded-3xl">
+        <DialogContent className="bg-surface dark:bg-surface border-border max-w-md mx-auto rounded-3xl">
           <DialogHeader>
             <DialogTitle className="text-foreground text-2xl font-bold">Add Category</DialogTitle>
           </DialogHeader>
@@ -168,7 +217,7 @@ const Subjects = () => {
                 onChange={(e) => setNewCategory(e.target.value)}
                 placeholder="Enter category name"
                 className="bg-background dark:bg-background border-border rounded-2xl"
-                onKeyPress={(e) => e.key === "Enter" && handleAddCategory()}
+                onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
               />
             </div>
 
@@ -214,6 +263,26 @@ const Subjects = () => {
           }
         }}
         currentIcon={addDialogOpen ? newIcon : categoryIcons[selectedCategory]}
+      />
+
+      <FloatingActionButton onClick={() => {
+        haptic('light');
+        setAddDialogOpen(true);
+      }} />
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Category?"
+        description={
+          categoryToDelete && categoryToDelete.taskCount > 0
+            ? `This category has ${categoryToDelete.taskCount} task(s). Deleting it will also delete all associated tasks. Continue?`
+            : "Are you sure you want to delete this category?"
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        variant="destructive"
       />
     </div>
   );

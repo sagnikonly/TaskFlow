@@ -65,7 +65,7 @@ export const AddTaskDialog = ({ open, onOpenChange }: AddTaskDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-surface dark:bg-surface border-border max-w-md mx-4 rounded-3xl">
+      <DialogContent className="bg-surface dark:bg-surface border-border max-w-md mx-auto rounded-3xl">
         <DialogHeader>
           <DialogTitle className="text-foreground text-2xl font-bold">Add New Task</DialogTitle>
         </DialogHeader>
@@ -151,7 +151,23 @@ export const AddTaskDialog = ({ open, onOpenChange }: AddTaskDialogProps) => {
                 id="countTotal"
                 type="number"
                 value={countTotal}
-                onChange={(e) => setCountTotal(Number(e.target.value))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // If empty, set to empty string temporarily
+                  if (value === '') {
+                    setCountTotal(0);
+                  } else {
+                    // Parse and set the number, removing leading zeros
+                    const num = parseInt(value, 10);
+                    if (!isNaN(num) && num >= 1) {
+                      setCountTotal(num);
+                    }
+                  }
+                }}
+                onFocus={(e) => {
+                  // Select all text on focus for easy editing
+                  e.target.select();
+                }}
                 min={1}
                 className="bg-background dark:bg-background border-border rounded-2xl"
               />

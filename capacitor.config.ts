@@ -12,6 +12,9 @@ const config: CapacitorConfig = {
       launchShowDuration: 2000,
       backgroundColor: "#ffffff",
       showSpinner: false
+    },
+    StatusBar: {
+      overlaysWebView: false
     }
   }
 };

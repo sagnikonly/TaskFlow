@@ -1,6 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { useTasks } from "@/contexts/TaskContext";
 import { TrendingUp, Award, Target, Sparkles, CheckCircle2, Clock } from "lucide-react";
+import { useBackButton } from "@/hooks/use-back-button";
+import { useHaptics } from "@/hooks/use-haptics";
 
 interface StepUpDashboardProps {
   onClose: () => void;
@@ -8,6 +10,16 @@ interface StepUpDashboardProps {
 
 export const StepUpDashboard = ({ onClose }: StepUpDashboardProps) => {
   const { tasks } = useTasks();
+  const { haptic } = useHaptics();
+
+  // Handle back button
+  useBackButton({
+    onBack: () => {
+      onClose();
+      return true;
+    },
+    priority: 20,
+  });
 
   // Get all step-up tasks
   const stepUpTasks = tasks.filter((t) => t.isStepUp || t.stepUpHistory?.length);
@@ -47,12 +59,15 @@ export const StepUpDashboard = ({ onClose }: StepUpDashboardProps) => {
     : 0;
 
   return (
-    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-24">
-      <div className="max-w-lg mx-auto p-4">
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <div className="max-w-lg mx-auto px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 animate-slide-in-right">
           <button
-            onClick={onClose}
+            onClick={() => {
+              haptic('light');
+              onClose();
+            }}
             className="p-2 rounded-full hover:bg-muted/50 transition-colors"
           >
             <span className="material-symbols-outlined text-foreground">close</span>

@@ -50,7 +50,7 @@ const Home = () => {
   const hasAnyTasks = tasks.length > 0;
 
   return (
-    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-24 animate-fade-in">
+    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] animate-fade-in">
       <AppHeader currentDate={getCurrentDate()} />
 
       <main>

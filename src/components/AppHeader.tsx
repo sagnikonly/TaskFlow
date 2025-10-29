@@ -6,8 +6,8 @@ interface AppHeaderProps {
 
 export const AppHeader = ({ currentDate }: AppHeaderProps) => {
   return (
-    <header className="flex flex-col gap-2 bg-background px-4 pt-2 pb-2 sticky top-0 z-10">
-      <div className="flex items-center h-12 justify-between">
+    <header className="flex flex-col gap-1 bg-background px-4 pt-[calc(env(safe-area-inset-top)+0.25rem)] pb-2 sticky top-0 z-10">
+      <div className="flex items-center h-10 justify-between">
         <div className="text-foreground flex size-12 shrink-0 items-center">
           <span className="material-symbols-outlined text-3xl">event_note</span>
         </div>

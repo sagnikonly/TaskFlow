@@ -9,7 +9,7 @@ export const FloatingActionButton = ({ onClick }: FloatingActionButtonProps) => 
   const { haptic } = useHaptics();
 
   const handleClick = () => {
-    haptic('heavy');
+    haptic('light');
     onClick();
   };
 

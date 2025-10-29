@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { useTasks } from "@/contexts/TaskContext";
 import { TrendingUp, TrendingDown, Minus, Target, Zap, Calendar } from "lucide-react";
+import { useBackButton } from "@/hooks/use-back-button";
+import { useHaptics } from "@/hooks/use-haptics";
 
 interface SubjectAnalyticsProps {
   onClose: () => void;
@@ -10,6 +12,22 @@ interface SubjectAnalyticsProps {
 export const SubjectAnalytics = ({ onClose }: SubjectAnalyticsProps) => {
   const { tasks, categories, categoryIcons } = useTasks();
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const { haptic } = useHaptics();
+
+  // Handle back button
+  useBackButton({
+    onBack: () => {
+      if (selectedSubject) {
+        // If viewing a specific subject, go back to subject list
+        setSelectedSubject(null);
+        return true;
+      }
+      // If in subject list, go back to analysis overview
+      onClose();
+      return true;
+    },
+    priority: 20, // Higher priority than Analysis page
+  });
 
   const getSubjectStats = (category: string) => {
     const categoryTasks = tasks.filter((t) => t.category === category);
@@ -90,12 +108,15 @@ export const SubjectAnalytics = ({ onClose }: SubjectAnalyticsProps) => {
     const maxValue = Math.max(...stats.last7Days, 1);
 
     return (
-      <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-24">
-        <div className="max-w-lg mx-auto p-4">
+      <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-lg mx-auto px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-4">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6 animate-slide-in-right">
             <button
-              onClick={() => setSelectedSubject(null)}
+              onClick={() => {
+                haptic('light');
+                setSelectedSubject(null);
+              }}
               className="p-2 rounded-full hover:bg-muted/50 transition-colors"
             >
               <span className="material-symbols-outlined text-foreground">arrow_back</span>
@@ -218,12 +239,15 @@ export const SubjectAnalytics = ({ onClose }: SubjectAnalyticsProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-24">
-      <div className="max-w-lg mx-auto p-4">
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <div className="max-w-lg mx-auto px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 animate-slide-in-right">
           <button
-            onClick={onClose}
+            onClick={() => {
+              haptic('light');
+              onClose();
+            }}
             className="p-2 rounded-full hover:bg-muted/50 transition-colors"
           >
             <span className="material-symbols-outlined text-foreground">close</span>
@@ -243,7 +267,10 @@ export const SubjectAnalytics = ({ onClose }: SubjectAnalyticsProps) => {
             return (
               <Card
                 key={category}
-                onClick={() => setSelectedSubject(category)}
+                onClick={() => {
+                  haptic('light');
+                  setSelectedSubject(category);
+                }}
                 className={`bg-gradient-to-br ${colors.bg} ${colors.border} border p-5 rounded-[2rem] cursor-pointer hover:scale-[1.02] transition-all duration-300 animate-slide-in-right`}
                 style={{ animationDelay: `${index * 0.1}s` }}
               >

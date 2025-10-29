@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { TaskProvider } from "./contexts/TaskContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { HapticsProvider } from "./contexts/HapticsContext";
@@ -16,6 +16,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { useEffect, useState } from "react";
 import { setupStatusBar, updateStatusBarTheme } from "./lib/statusbar";
+import { setupGlobalBackButton } from "./hooks/use-back-button";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -39,6 +40,23 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const queryClient = new QueryClient();
+
+// Component to handle back button inside Router context
+const BackButtonHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const cleanup = setupGlobalBackButton(
+      navigate,
+      () => location.pathname
+    );
+
+    return cleanup;
+  }, [navigate, location.pathname]);
+
+  return null;
+};
 
 const App = () => {
   const [isDark, setIsDark] = useState(() => {
@@ -79,6 +97,7 @@ const App = () => {
                   v7_relativeSplatPath: true,
                 }}
               >
+              <BackButtonHandler />
               <div className="w-full">
                 <Routes>
                   <Route path="/auth" element={<Auth />} />

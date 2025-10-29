@@ -17,8 +17,8 @@ export const setupStatusBar = async () => {
 
     // Check localStorage first, then check DOM class
     const savedTheme = localStorage.getItem('theme');
-    const isDark = savedTheme === 'dark' || 
-                   (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const isDark = savedTheme === 'dark' ||
+      (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
     // Apply theme to DOM if not already applied
     if (isDark) {
@@ -28,16 +28,18 @@ export const setupStatusBar = async () => {
     }
 
     // Set initial style based on theme
-    await StatusBar.setStyle({ 
-      style: isDark ? Style.Dark : Style.Light 
+    // Style.Dark = dark text/icons (for light backgrounds)
+    // Style.Light = light text/icons (for dark backgrounds)
+    await StatusBar.setStyle({
+      style: isDark ? Style.Dark : Style.Light
     });
 
-    // Set status bar background color to match app theme
+    // Set status bar background color
     if (Capacitor.getPlatform() === 'android') {
       // Light mode: white background with dark icons
       // Dark mode: dark background with light icons
-      await StatusBar.setBackgroundColor({ 
-        color: isDark ? '#1C0A1E' : '#FFFFFF' 
+      await StatusBar.setBackgroundColor({
+        color: isDark ? '#000000' : '#FFFFFF'
       });
     }
 
@@ -56,13 +58,17 @@ export const updateStatusBarTheme = async (isDark: boolean) => {
   }
 
   try {
-    await StatusBar.setStyle({ 
-      style: isDark ? Style.Dark : Style.Light 
+    // Style.Dark = dark text/icons (for light backgrounds)
+    // Style.Light = light text/icons (for dark backgrounds)
+    await StatusBar.setStyle({
+      style: isDark ? Style.Dark : Style.Light
     });
 
     if (Capacitor.getPlatform() === 'android') {
-      await StatusBar.setBackgroundColor({ 
-        color: isDark ? '#1C0A1E' : '#FFFFFF' 
+      // Light mode: white background with dark icons
+      // Dark mode: dark background with light icons
+      await StatusBar.setBackgroundColor({
+        color: isDark ? '#000000' : '#FFFFFF'
       });
     }
   } catch (error) {

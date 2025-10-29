@@ -7,6 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useTasks } from "@/contexts/TaskContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,17 +26,20 @@ import { useHaptics } from "@/hooks/use-haptics";
 import { triggerHaptic } from "@/lib/haptics";
 import { createConfettiBurst } from "@/lib/confetti";
 import { updateStatusBarTheme } from "@/lib/statusbar";
+import { useBackButton } from "@/hooks/use-back-button";
 
 type Theme = "purple" | "blue" | "green" | "orange" | "pink";
 
 const Settings = () => {
-  const { tasks } = useTasks();
+  const { tasks, importTasks } = useTasks();
   const { user, profile, signOut, updateProfile } = useAuth();
   const navigate = useNavigate();
   const { enabled: hapticsEnabled, intensity: hapticsIntensity, supported: hapticsSupported, setEnabled: setHapticsEnabled, setIntensity: setHapticsIntensity } = useHapticsContext();
   const { haptic } = useHaptics();
   const [notifications, setNotifications] = useState(true);
   const [soundEffects, setSoundEffects] = useState(true);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [pendingImport, setPendingImport] = useState<{ tasks: any[]; existingCount: number } | null>(null);
   const [autoDelete, setAutoDelete] = useState(false);
   const [confettiEnabled, setConfettiEnabled] = useState(() => {
     const saved = localStorage.getItem("confetti_enabled");
@@ -43,6 +56,15 @@ const Settings = () => {
     full_name: profile?.full_name || "",
     target_exam: profile?.target_exam || "",
     goal: profile?.goal || "",
+  });
+
+  // Handle back button - go to home
+  useBackButton({
+    onBack: () => {
+      navigate('/');
+      return true;
+    },
+    priority: 10,
   });
 
   useEffect(() => {
@@ -67,6 +89,35 @@ const Settings = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success("Data exported successfully!");
+  };
+
+  const handleImportData = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const importedTasks = JSON.parse(text);
+
+        // Validate the imported data
+        if (!Array.isArray(importedTasks)) {
+          toast.error("Invalid file format. Expected an array of tasks.");
+          return;
+        }
+
+        // Show custom dialog to ask user if they want to replace or merge
+        setPendingImport({ tasks: importedTasks, existingCount: tasks.length });
+        setImportDialogOpen(true);
+      } catch (error) {
+        console.error("Error importing data:", error);
+        toast.error("Failed to import data. Please check the file format.");
+      }
+    };
+    input.click();
   };
 
   const handleClearCompleted = () => {
@@ -171,7 +222,7 @@ const Settings = () => {
   }, []);
 
   return (
-    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-24 p-4 animate-fade-in">
+    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] animate-fade-in">
       <header className="mb-6 animate-slide-in-right" style={{ animationDelay: "0.1s", animationFillMode: "both" }}>
         <div className="flex items-center gap-3 mb-2">
           <span className="material-symbols-outlined text-primary text-4xl">settings</span>
@@ -498,10 +549,17 @@ const Settings = () => {
 
           <Separator className="bg-border/50" />
 
-          <Button onClick={handleExportData} variant="outline" className="w-full rounded-2xl justify-start gap-2">
-            <span className="material-symbols-outlined">download</span>
-            Export Data
-          </Button>
+          <div className="grid grid-cols-2 gap-3">
+            <Button onClick={handleExportData} variant="outline" className="rounded-2xl justify-center gap-2">
+              <span className="material-symbols-outlined">download</span>
+              Export
+            </Button>
+
+            <Button onClick={handleImportData} variant="outline" className="rounded-2xl justify-center gap-2">
+              <span className="material-symbols-outlined">upload</span>
+              Import
+            </Button>
+          </div>
 
           <Button onClick={handleClearCompleted} variant="outline" className="w-full rounded-2xl justify-start gap-2 text-destructive border-destructive/50 hover:bg-destructive/10">
             <span className="material-symbols-outlined">delete_sweep</span>
@@ -533,6 +591,59 @@ const Settings = () => {
           </Button>
         </div>
       </Card>
+
+      {/* Import Dialog with Replace/Merge options */}
+      <AlertDialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <AlertDialogContent className="bg-surface dark:bg-surface border-border max-w-md mx-auto rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground text-xl font-bold">
+              Import Tasks
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground text-base leading-relaxed pt-2">
+              {pendingImport && (
+                <>
+                  Found <strong>{pendingImport.tasks.length}</strong> tasks to import.
+                  <br /><br />
+                  <strong>Replace:</strong> Delete all {pendingImport.existingCount} existing tasks and import new ones.
+                  <br /><br />
+                  <strong>Merge:</strong> Keep existing tasks and add new ones.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 mt-6 sm:flex-col">
+            <AlertDialogAction
+              onClick={async () => {
+                if (pendingImport) {
+                  haptic('success');
+                  await importTasks(pendingImport.tasks, "replace");
+                  setPendingImport(null);
+                  setImportDialogOpen(false);
+                }
+              }}
+              className="w-full rounded-2xl bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Replace All Tasks
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={async () => {
+                if (pendingImport) {
+                  haptic('success');
+                  await importTasks(pendingImport.tasks, "merge");
+                  setPendingImport(null);
+                  setImportDialogOpen(false);
+                }
+              }}
+              className="w-full rounded-2xl bg-primary hover:bg-primary/90"
+            >
+              Merge with Existing
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full rounded-2xl border-border hover:bg-muted mt-0">
+              Cancel
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

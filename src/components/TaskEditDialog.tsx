@@ -143,7 +143,7 @@ export const TaskEditDialog = ({ open, onOpenChange, task }: TaskEditDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-surface dark:bg-surface border-border max-w-md rounded-t-3xl rounded-b-none sm:rounded-3xl fixed bottom-0 left-1/2 -translate-x-1/2 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-y-1/2 w-[calc(100%-2rem)] sm:w-full animate-slide-up">
+      <DialogContent className="bg-surface dark:bg-surface border-border max-w-md mx-auto rounded-t-3xl rounded-b-none sm:rounded-3xl fixed bottom-0 left-1/2 -translate-x-1/2 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-y-1/2 w-[calc(100%-2rem)] sm:w-full animate-slide-up">
         <DialogHeader>
           <DialogTitle className="text-foreground text-2xl font-bold flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">edit</span>
@@ -226,7 +226,23 @@ export const TaskEditDialog = ({ open, onOpenChange, task }: TaskEditDialogProps
                 <Input
                   type="number"
                   value={countTotal}
-                  onChange={(e) => setCountTotal(Number(e.target.value))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // If empty, set to 0 temporarily
+                    if (value === '') {
+                      setCountTotal(0);
+                    } else {
+                      // Parse and set the number, removing leading zeros
+                      const num = parseInt(value, 10);
+                      if (!isNaN(num) && num >= 1) {
+                        setCountTotal(num);
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    // Select all text on focus for easy editing
+                    e.target.select();
+                  }}
                   min={1}
                   className="bg-background dark:bg-background border-border rounded-2xl"
                 />

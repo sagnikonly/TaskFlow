@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTasks } from "@/contexts/TaskContext";
 import { Card } from "@/components/ui/card";
 import { CheckCircle2, Flame, TrendingUp, BarChart3, Target, Calendar, Brain, Sparkles, ChevronRight } from "lucide-react";
@@ -7,13 +8,43 @@ import { StepUpDashboard } from "@/components/analytics/StepUpDashboard";
 import { ProductivityHeatmap } from "@/components/analytics/ProductivityHeatmap";
 import { GoalTracker } from "@/components/analytics/GoalTracker";
 import { AdvancedInsights } from "@/components/analytics/AdvancedInsights";
+import { useBackButton } from "@/hooks/use-back-button";
+import { useHaptics } from "@/hooks/use-haptics";
 
 type AnalyticsView = "overview" | "subjects" | "stepup" | "heatmap" | "goals" | "insights";
 
 const Analysis = () => {
+  const navigate = useNavigate();
   const { getTaskStats } = useTasks();
   const stats = getTaskStats();
   const [currentView, setCurrentView] = useState<AnalyticsView>("overview");
+  const [renderKey, setRenderKey] = useState(0);
+  const isReturningRef = useRef(false);
+  const { haptic } = useHaptics();
+
+  // Handle back button
+  useBackButton({
+    onBack: () => {
+      if (currentView !== "overview") {
+        // If in a subsection, go back to overview
+        isReturningRef.current = true;
+        setCurrentView("overview");
+        setRenderKey(prev => prev + 1); // Force re-render without animations
+        return true; // Handled
+      }
+      // If in overview, let default handler take over (go to home)
+      navigate('/');
+      return true;
+    },
+    priority: 10, // Higher priority than default
+  });
+
+  // Reset isReturning flag when view changes to non-overview
+  useEffect(() => {
+    if (currentView !== "overview") {
+      isReturningRef.current = false;
+    }
+  }, [currentView]);
 
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
@@ -43,6 +74,11 @@ const Analysis = () => {
 
   const weeklyData = getWeeklyData();
   const maxCount = Math.max(...weeklyData.map(d => d.count), 1);
+
+  // Helper function to conditionally apply animations
+  const getAnimationClass = (baseClass: string) => {
+    return isReturningRef.current ? '' : baseClass;
+  };
 
   // Get category distribution with actual data
   const categoryData = stats.categoryStats
@@ -80,9 +116,9 @@ const Analysis = () => {
   }
 
   return (
-    <div className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-24 px-4 pt-6 bg-background touch-manipulation">
+    <div key={renderKey} className="relative flex h-auto min-h-screen w-full max-w-lg mx-auto flex-col overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] bg-background touch-manipulation">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 animate-slide-in-right">
+      <div className={`flex items-center justify-between mb-6 ${getAnimationClass('animate-slide-in-right')}`}>
         <div>
           <h1 className="text-3xl font-black text-foreground">Analysis</h1>
           <p className="text-sm text-muted-foreground">Track your progress & insights</p>
@@ -91,7 +127,7 @@ const Analysis = () => {
 
       {/* Top Stats Cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <Card className="bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-950/30 dark:to-violet-900/20 border-0 p-5 rounded-[2rem] shadow-sm animate-scale-in active:scale-95 transition-transform cursor-pointer select-none">
+        <Card className={`bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-950/30 dark:to-violet-900/20 border-0 p-5 rounded-[2rem] shadow-sm ${getAnimationClass('animate-scale-in')} active:scale-95 transition-transform cursor-pointer select-none`}>
           <div className="flex flex-col items-start gap-2">
             <div className="p-2 rounded-xl bg-violet-600/10">
               <CheckCircle2 className="w-6 h-6 text-violet-600" />
@@ -101,7 +137,7 @@ const Analysis = () => {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-pink-100 to-pink-50 dark:from-pink-950/30 dark:to-pink-900/20 border-0 p-5 rounded-[2rem] shadow-sm animate-scale-in active:scale-95 transition-transform cursor-pointer select-none" style={{ animationDelay: "0.1s" }}>
+        <Card className={`bg-gradient-to-br from-pink-100 to-pink-50 dark:from-pink-950/30 dark:to-pink-900/20 border-0 p-5 rounded-[2rem] shadow-sm ${getAnimationClass('animate-scale-in')} active:scale-95 transition-transform cursor-pointer select-none`} style={!isReturningRef.current ? { animationDelay: "0.1s" } : {}}>
           <div className="flex flex-col items-start gap-2">
             <div className="p-2 rounded-xl bg-pink-600/10">
               <Flame className="w-6 h-6 text-pink-600" />
@@ -111,7 +147,7 @@ const Analysis = () => {
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-cyan-100 to-cyan-50 dark:from-cyan-950/30 dark:to-cyan-900/20 border-0 p-5 rounded-[2rem] shadow-sm animate-scale-in active:scale-95 transition-transform cursor-pointer select-none" style={{ animationDelay: "0.2s" }}>
+        <Card className={`bg-gradient-to-br from-cyan-100 to-cyan-50 dark:from-cyan-950/30 dark:to-cyan-900/20 border-0 p-5 rounded-[2rem] shadow-sm ${getAnimationClass('animate-scale-in')} active:scale-95 transition-transform cursor-pointer select-none`} style={!isReturningRef.current ? { animationDelay: "0.2s" } : {}}>
           <div className="flex flex-col items-start gap-2">
             <div className="p-2 rounded-xl bg-cyan-600/10">
               <TrendingUp className="w-6 h-6 text-cyan-600" />
@@ -124,7 +160,7 @@ const Analysis = () => {
 
       {/* Daily Completion Chart - Moved here */}
       {hasData && (
-        <Card className="bg-surface border-border p-6 rounded-[2rem] mb-6 shadow-sm animate-slide-in-right" style={{ animationDelay: "0.3s" }}>
+        <Card className={`bg-surface border-border p-6 rounded-[2rem] mb-6 shadow-sm ${getAnimationClass('animate-slide-in-right')}`} style={!isReturningRef.current ? { animationDelay: "0.3s" } : {}}>
           <div className="mb-4">
             <h2 className="text-xl font-black text-foreground mb-1">Daily Completion</h2>
             <p className="text-xs text-muted-foreground">Tasks completed this week</p>
@@ -157,9 +193,12 @@ const Analysis = () => {
       {/* Quick Access Analytics Cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <Card 
-          onClick={() => setCurrentView("subjects")}
-          className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all animate-slide-in-right select-none"
-          style={{ animationDelay: "0.75s" }}
+          onClick={() => {
+            haptic('light');
+            setCurrentView("subjects");
+          }}
+          className={`bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all ${getAnimationClass('animate-slide-in-right')} select-none`}
+          style={!isReturningRef.current ? { animationDelay: "0.75s" } : {}}
         >
           <div className="flex items-start justify-between mb-3">
             <div className="p-2 rounded-xl bg-purple-500/10">
@@ -172,9 +211,12 @@ const Analysis = () => {
         </Card>
 
         <Card 
-          onClick={() => setCurrentView("stepup")}
-          className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-blue-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all animate-slide-in-right select-none"
-          style={{ animationDelay: "0.85s" }}
+          onClick={() => {
+            haptic('light');
+            setCurrentView("stepup");
+          }}
+          className={`bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border-blue-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all ${getAnimationClass('animate-slide-in-right')} select-none`}
+          style={!isReturningRef.current ? { animationDelay: "0.85s" } : {}}
         >
           <div className="flex items-start justify-between mb-3">
             <div className="p-2 rounded-xl bg-blue-500/10">
@@ -187,9 +229,12 @@ const Analysis = () => {
         </Card>
 
         <Card 
-          onClick={() => setCurrentView("heatmap")}
-          className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all animate-slide-in-right select-none"
-          style={{ animationDelay: "0.95s" }}
+          onClick={() => {
+            haptic('light');
+            setCurrentView("heatmap");
+          }}
+          className={`bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all ${getAnimationClass('animate-slide-in-right')} select-none`}
+          style={!isReturningRef.current ? { animationDelay: "0.95s" } : {}}
         >
           <div className="flex items-start justify-between mb-3">
             <div className="p-2 rounded-xl bg-green-500/10">
@@ -202,9 +247,12 @@ const Analysis = () => {
         </Card>
 
         <Card 
-          onClick={() => setCurrentView("goals")}
-          className="bg-gradient-to-br from-orange-500/20 to-red-500/20 border-orange-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all animate-slide-in-right select-none"
-          style={{ animationDelay: "1.05s" }}
+          onClick={() => {
+            haptic('light');
+            setCurrentView("goals");
+          }}
+          className={`bg-gradient-to-br from-orange-500/20 to-red-500/20 border-orange-500/30 border p-5 rounded-[2rem] cursor-pointer active:scale-95 transition-all ${getAnimationClass('animate-slide-in-right')} select-none`}
+          style={!isReturningRef.current ? { animationDelay: "1.05s" } : {}}
         >
           <div className="flex items-start justify-between mb-3">
             <div className="p-2 rounded-xl bg-orange-500/10">
@@ -219,9 +267,12 @@ const Analysis = () => {
 
       {/* AI Insights Card */}
       <Card 
-        onClick={() => setCurrentView("insights")}
-        className="bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border-amber-500/30 border p-6 rounded-[2rem] mb-6 cursor-pointer active:scale-95 transition-all animate-scale-in select-none"
-        style={{ animationDelay: "1.15s" }}
+        onClick={() => {
+          haptic('light');
+          setCurrentView("insights");
+        }}
+        className={`bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border-amber-500/30 border p-6 rounded-[2rem] mb-6 cursor-pointer active:scale-95 transition-all ${getAnimationClass('animate-scale-in')} select-none`}
+        style={!isReturningRef.current ? { animationDelay: "1.15s" } : {}}
       >
         <div className="flex items-center gap-4">
           <div className="p-3 rounded-2xl bg-amber-500/10">
@@ -239,11 +290,14 @@ const Analysis = () => {
         <>
 
           {/* Subject Distribution */}
-          <Card className="bg-surface border-border p-6 rounded-[2rem] shadow-sm mb-6 animate-slide-in-right" style={{ animationDelay: "1.25s" }}>
+          <Card className={`bg-surface border-border p-6 rounded-[2rem] shadow-sm mb-6 ${getAnimationClass('animate-slide-in-right')}`} style={!isReturningRef.current ? { animationDelay: "1.25s" } : {}}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-black text-foreground">Subject Distribution</h2>
               <button
-                onClick={() => setCurrentView("subjects")}
+                onClick={() => {
+                  haptic('light');
+                  setCurrentView("subjects");
+                }}
                 className="text-xs font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
               >
                 View All
@@ -254,7 +308,7 @@ const Analysis = () => {
             {categoryData.length > 0 ? (
               <>
                 {/* Donut Chart */}
-                <div className="flex items-center justify-center mb-6 animate-scale-in" style={{ animationDelay: "1.3s" }}>
+                <div className={`flex items-center justify-center mb-6 ${getAnimationClass('animate-scale-in')}`} style={!isReturningRef.current ? { animationDelay: "1.3s" } : {}}>
                   <div className="relative w-48 h-48">
                     <svg viewBox="0 0 200 200" className="transform -rotate-90">
                       {categoryData.map((cat, index) => {
@@ -314,7 +368,7 @@ const Analysis = () => {
           </Card>
         </>
       ) : (
-        <Card className="bg-surface border-border p-8 rounded-[2rem] shadow-sm animate-scale-in">
+        <Card className={`bg-surface border-border p-8 rounded-[2rem] shadow-sm ${getAnimationClass('animate-scale-in')}`}>
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-4 animate-pulse">
               <span className="material-symbols-outlined text-primary text-5xl">analytics</span>

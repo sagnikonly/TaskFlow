@@ -1,7 +1,21 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Migration to update task ID column from UUID to TEXT
+-- This allows both UUID and timestamp-based string IDs
 
--- Tasks table
+-- Drop existing tables if they exist (only if empty or in development)
+-- In production, you'd want to migrate data instead
+
+-- Check if tables exist and are empty before dropping
+DO $$ 
+BEGIN
+    -- Only proceed if tables are empty or don't exist
+    IF NOT EXISTS (SELECT 1 FROM tasks LIMIT 1) THEN
+        DROP TABLE IF EXISTS tasks CASCADE;
+        DROP TABLE IF EXISTS categories CASCADE;
+        DROP TABLE IF EXISTS user_analytics CASCADE;
+    END IF;
+END $$;
+
+-- Recreate tasks table with TEXT id
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -27,7 +41,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
--- Categories table
+-- Recreate categories table with TEXT id
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -38,7 +52,7 @@ CREATE TABLE IF NOT EXISTS categories (
   UNIQUE(user_id, name)
 );
 
--- Analytics/Stats table (for caching computed analytics)
+-- Recreate analytics table with TEXT id
 CREATE TABLE IF NOT EXISTS user_analytics (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
@@ -53,7 +67,7 @@ CREATE TABLE IF NOT EXISTS user_analytics (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for performance
+-- Recreate indexes
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
@@ -61,105 +75,81 @@ CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
 CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_user_id ON user_analytics(user_id);
 
--- Enable Row Level Security
+-- Recreate RLS policies
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_analytics ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for tasks
+DROP POLICY IF EXISTS "Users can view their own tasks" ON tasks;
 CREATE POLICY "Users can view their own tasks"
   ON tasks FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own tasks" ON tasks;
 CREATE POLICY "Users can insert their own tasks"
   ON tasks FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own tasks" ON tasks;
 CREATE POLICY "Users can update their own tasks"
   ON tasks FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own tasks" ON tasks;
 CREATE POLICY "Users can delete their own tasks"
   ON tasks FOR DELETE
   USING (auth.uid() = user_id);
 
--- RLS Policies for categories
+DROP POLICY IF EXISTS "Users can view their own categories" ON categories;
 CREATE POLICY "Users can view their own categories"
   ON categories FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own categories" ON categories;
 CREATE POLICY "Users can insert their own categories"
   ON categories FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own categories" ON categories;
 CREATE POLICY "Users can update their own categories"
   ON categories FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own categories" ON categories;
 CREATE POLICY "Users can delete their own categories"
   ON categories FOR DELETE
   USING (auth.uid() = user_id);
 
--- RLS Policies for analytics
+DROP POLICY IF EXISTS "Users can view their own analytics" ON user_analytics;
 CREATE POLICY "Users can view their own analytics"
   ON user_analytics FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own analytics" ON user_analytics;
 CREATE POLICY "Users can insert their own analytics"
   ON user_analytics FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own analytics" ON user_analytics;
 CREATE POLICY "Users can update their own analytics"
   ON user_analytics FOR UPDATE
   USING (auth.uid() = user_id);
 
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Triggers for updated_at
+-- Recreate triggers
+DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 CREATE TRIGGER update_tasks_updated_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_categories_updated_at ON categories;
 CREATE TRIGGER update_categories_updated_at
   BEFORE UPDATE ON categories
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_analytics_updated_at ON user_analytics;
 CREATE TRIGGER update_analytics_updated_at
   BEFORE UPDATE ON user_analytics
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-
--- Function to initialize default categories for new users
-CREATE OR REPLACE FUNCTION initialize_user_categories()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO categories (user_id, name, icon) VALUES
-    (NEW.id, 'Work', 'work'),
-    (NEW.id, 'Health', 'favorite'),
-    (NEW.id, 'Personal Growth', 'auto_stories'),
-    (NEW.id, 'Shopping', 'shopping_cart'),
-    (NEW.id, 'Fitness', 'fitness_center')
-  ON CONFLICT (user_id, name) DO NOTHING;
-  
-  INSERT INTO user_analytics (user_id) VALUES (NEW.id)
-  ON CONFLICT (user_id) DO NOTHING;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to initialize categories when user signs up
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION initialize_user_categories();

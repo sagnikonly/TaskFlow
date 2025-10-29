@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { useTasks } from "@/contexts/TaskContext";
 import { Calendar, Filter } from "lucide-react";
+import { useBackButton } from "@/hooks/use-back-button";
 
 interface ProductivityHeatmapProps {
   onClose: () => void;
@@ -10,6 +11,15 @@ interface ProductivityHeatmapProps {
 export const ProductivityHeatmap = ({ onClose }: ProductivityHeatmapProps) => {
   const { tasks, categories } = useTasks();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Handle back button
+  useBackButton({
+    onBack: () => {
+      onClose();
+      return true;
+    },
+    priority: 20,
+  });
 
   // Generate heatmap data for last 90 days
   const generateHeatmapData = () => {
@@ -78,8 +88,8 @@ export const ProductivityHeatmap = ({ onClose }: ProductivityHeatmapProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-24">
-      <div className="max-w-lg mx-auto p-4">
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <div className="max-w-lg mx-auto px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 animate-slide-in-right">
           <button
