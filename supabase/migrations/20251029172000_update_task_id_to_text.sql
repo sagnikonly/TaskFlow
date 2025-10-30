@@ -67,6 +67,20 @@ CREATE TABLE IF NOT EXISTS user_analytics (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- User settings table (for API keys and preferences)
+CREATE TABLE IF NOT EXISTS user_settings (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+  gemini_api_key TEXT,
+  theme TEXT DEFAULT 'system',
+  notifications_enabled BOOLEAN DEFAULT true,
+  haptics_enabled BOOLEAN DEFAULT true,
+  haptics_intensity TEXT DEFAULT 'medium',
+  confetti_enabled BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Recreate indexes
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
@@ -74,11 +88,13 @@ CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
 CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
 CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_user_id ON user_analytics(user_id);
+CREATE INDEX IF NOT EXISTS idx_settings_user_id ON user_settings(user_id);
 
 -- Recreate RLS policies
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_analytics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own tasks" ON tasks;
 CREATE POLICY "Users can view their own tasks"
@@ -135,6 +151,22 @@ CREATE POLICY "Users can update their own analytics"
   ON user_analytics FOR UPDATE
   USING (auth.uid() = user_id);
 
+-- RLS Policies for user_settings
+DROP POLICY IF EXISTS "Users can view their own settings" ON user_settings;
+CREATE POLICY "Users can view their own settings"
+  ON user_settings FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own settings" ON user_settings;
+CREATE POLICY "Users can insert their own settings"
+  ON user_settings FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update their own settings" ON user_settings;
+CREATE POLICY "Users can update their own settings"
+  ON user_settings FOR UPDATE
+  USING (auth.uid() = user_id);
+
 -- Recreate triggers
 DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
 CREATE TRIGGER update_tasks_updated_at
@@ -151,5 +183,11 @@ CREATE TRIGGER update_categories_updated_at
 DROP TRIGGER IF EXISTS update_analytics_updated_at ON user_analytics;
 CREATE TRIGGER update_analytics_updated_at
   BEFORE UPDATE ON user_analytics
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_settings_updated_at ON user_settings;
+CREATE TRIGGER update_settings_updated_at
+  BEFORE UPDATE ON user_settings
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();

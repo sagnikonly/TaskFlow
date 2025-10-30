@@ -27,11 +27,13 @@ import { triggerHaptic } from "@/lib/haptics";
 import { createConfettiBurst } from "@/lib/confetti";
 import { updateStatusBarTheme } from "@/lib/statusbar";
 import { useBackButton } from "@/hooks/use-back-button";
+import { syncService } from "@/lib/sync-service";
 
 type Theme = "purple" | "blue" | "green" | "orange" | "pink";
 
 const Settings = () => {
-  const { tasks, importTasks } = useTasks();
+  const { tasks, importTasks, categories, removeCategory } = useTasks();
+  const { deleteTask } = useTasks();
   const { user, profile, signOut, updateProfile } = useAuth();
   const navigate = useNavigate();
   const { enabled: hapticsEnabled, intensity: hapticsIntensity, supported: hapticsSupported, setEnabled: setHapticsEnabled, setIntensity: setHapticsIntensity } = useHapticsContext();
@@ -46,6 +48,7 @@ const Settings = () => {
     return saved === null ? true : saved === "true";
   });
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("gemini_api_key") || "");
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("app_theme") as Theme) || "purple");
   const [showApiKey, setShowApiKey] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -66,6 +69,49 @@ const Settings = () => {
     },
     priority: 10,
   });
+
+  // Load settings from cloud when user logs in
+  useEffect(() => {
+    const loadCloudSettings = async () => {
+      if (!user) return;
+      
+      try {
+        setIsLoadingSettings(true);
+        const cloudSettings = await syncService.getUserSettings(user.id);
+        
+        if (cloudSettings) {
+          // Update API key if it exists in cloud and is different from local
+          if (cloudSettings.gemini_api_key) {
+            const localApiKey = localStorage.getItem("gemini_api_key");
+            if (cloudSettings.gemini_api_key !== localApiKey) {
+              setApiKey(cloudSettings.gemini_api_key);
+              localStorage.setItem("gemini_api_key", cloudSettings.gemini_api_key);
+              console.log("✅ API key synced from cloud");
+            }
+          }
+          
+          console.log("✅ Settings loaded from cloud");
+        } else {
+          console.log("📦 No cloud settings found, using local settings");
+        }
+      } catch (error: any) {
+        console.error("⚠️ Error loading settings from cloud:", error);
+        
+        // Don't show error toast for missing table - it's expected during setup
+        const errorMessage = error?.message || String(error);
+        if (!errorMessage.includes("relation") && !errorMessage.includes("does not exist")) {
+          toast.error("Failed to load settings from cloud", {
+            description: "Using local settings instead",
+            duration: 3000,
+          });
+        }
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    loadCloudSettings();
+  }, [user]);
 
   useEffect(() => {
     if (profile) {
@@ -120,13 +166,78 @@ const Settings = () => {
     input.click();
   };
 
-  const handleClearCompleted = () => {
-    toast.info("This feature will clear all completed tasks");
+  const handleResetAllData = async () => {
+    try {
+      // Clear all tasks
+      const allTaskIds = tasks.map(t => t.id);
+      for (const taskId of allTaskIds) {
+        await deleteTask(taskId);
+      }
+      
+      // Clear categories (keep default ones)
+      const defaultCategories = ["Work", "Health", "Personal Growth", "Shopping", "Fitness"];
+      const categoriesToRemove = categories.filter(cat => !defaultCategories.includes(cat));
+      for (const category of categoriesToRemove) {
+        await removeCategory(category);
+      }
+      
+      // Clear localStorage
+      localStorage.removeItem("tasks");
+      localStorage.removeItem("lastRecurrenceCheck");
+      
+      haptic('success');
+      toast.success("All data has been reset!");
+    } catch (error) {
+      console.error("Error resetting data:", error);
+      toast.error("Failed to reset data");
+      haptic('error');
+    }
   };
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem("gemini_api_key", apiKey);
-    toast.success("API key saved successfully!");
+  const handleSaveApiKey = async () => {
+    try {
+      // Save to localStorage first (always works)
+      localStorage.setItem("gemini_api_key", apiKey);
+      
+      // Sync to cloud if user is logged in
+      if (user) {
+        try {
+          await syncService.updateGeminiApiKey(user.id, apiKey);
+          toast.success("API key saved and synced to cloud!");
+          haptic('success');
+        } catch (cloudError: any) {
+          console.error("Cloud sync failed:", cloudError);
+          
+          // Show specific error messages
+          const errorMessage = cloudError?.message || String(cloudError);
+          if (errorMessage.includes("Database not set up")) {
+            toast.error("Database not set up", {
+              description: "API key saved locally. Contact support to enable cloud sync.",
+              duration: 5000,
+            });
+          } else if (errorMessage.includes("Authentication issue")) {
+            toast.error("Authentication issue", {
+              description: "API key saved locally. Try signing out and back in.",
+              duration: 5000,
+            });
+          } else {
+            toast.error("Cloud sync failed", {
+              description: "API key saved locally only",
+              duration: 3000,
+            });
+          }
+          
+          haptic('error');
+        }
+      } else {
+        toast.success("API key saved locally!");
+        haptic('success');
+      }
+    } catch (error) {
+      console.error("Error saving API key:", error);
+      toast.error("Failed to save API key");
+      haptic('error');
+    }
   };
 
   const handleThemeChange = (newTheme: Theme) => {
@@ -487,7 +598,26 @@ const Settings = () => {
               </div>
               <Button onClick={handleSaveApiKey} className="rounded-2xl bg-primary hover:bg-primary/90">Save</Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google AI Studio</a></p>
+            
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-xs text-muted-foreground">Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google AI Studio</a></p>
+              
+              {user && (
+                <div className="flex items-center gap-1 text-xs">
+                  {isLoadingSettings ? (
+                    <>
+                      <span className="material-symbols-outlined text-xs text-muted-foreground animate-spin">sync</span>
+                      <span className="text-muted-foreground">Syncing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-xs text-green-600">cloud_done</span>
+                      <span className="text-green-600 font-medium">Cloud Sync</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Card>
@@ -561,9 +691,9 @@ const Settings = () => {
             </Button>
           </div>
 
-          <Button onClick={handleClearCompleted} variant="outline" className="w-full rounded-2xl justify-start gap-2 text-destructive border-destructive/50 hover:bg-destructive/10">
-            <span className="material-symbols-outlined">delete_sweep</span>
-            Clear Completed Tasks
+          <Button onClick={handleResetAllData} variant="outline" className="w-full rounded-2xl justify-start gap-2 text-destructive border-destructive/50 hover:bg-destructive/10">
+            <span className="material-symbols-outlined">restart_alt</span>
+            Reset All Data
           </Button>
         </div>
       </Card>

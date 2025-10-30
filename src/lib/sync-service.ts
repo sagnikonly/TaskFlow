@@ -34,6 +34,19 @@ export interface CloudCategory {
     updated_at: string;
 }
 
+export interface CloudUserSettings {
+    id: string;
+    user_id: string;
+    gemini_api_key: string | null;
+    theme: string;
+    notifications_enabled: boolean;
+    haptics_enabled: boolean;
+    haptics_intensity: string;
+    confetti_enabled: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
 class SyncService {
     private syncInProgress = false;
     private lastSyncTime: Date | null = null;
@@ -314,6 +327,94 @@ class SyncService {
         }
     }
 
+    // User Settings Methods
+    async getUserSettings(userId: string): Promise<CloudUserSettings | null> {
+        try {
+            const { data, error } = await supabase
+                .from("user_settings")
+                .select("*")
+                .eq("user_id", userId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+            return data as CloudUserSettings | null;
+        } catch (error: any) {
+            console.error("Error getting user settings:", error);
+            
+            // Check if it's a table not found error
+            const errorMessage = error?.message || String(error);
+            if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+                console.warn("⚠️ user_settings table not found. Please run: supabase db push");
+                return null; // Return null instead of throwing
+            }
+            
+            throw error;
+        }
+    }
+
+    async saveUserSettings(userId: string, settings: Partial<CloudUserSettings>): Promise<void> {
+        try {
+            const { error } = await supabase
+                .from("user_settings")
+                .upsert({
+                    user_id: userId,
+                    ...settings,
+                }, {
+                    onConflict: 'user_id'
+                });
+
+            if (error) throw error;
+        } catch (error) {
+            console.error("Error saving user settings:", error);
+            throw error;
+        }
+    }
+
+    async updateGeminiApiKey(userId: string, apiKey: string): Promise<void> {
+        try {
+            // First, try to get existing settings
+            const { data: existingSettings } = await supabase
+                .from("user_settings")
+                .select("*")
+                .eq("user_id", userId)
+                .single();
+
+            if (existingSettings) {
+                // Update existing record
+                const { error } = await supabase
+                    .from("user_settings")
+                    .update({ gemini_api_key: apiKey })
+                    .eq("user_id", userId);
+
+                if (error) throw error;
+            } else {
+                // Insert new record
+                const { error } = await supabase
+                    .from("user_settings")
+                    .insert({
+                        user_id: userId,
+                        gemini_api_key: apiKey,
+                    });
+
+                if (error) throw error;
+            }
+
+            console.log("✅ Gemini API key synced to cloud");
+        } catch (error: any) {
+            console.error("❌ Error syncing Gemini API key:", error);
+            
+            // Check if it's a table not found error
+            const errorMessage = error?.message || String(error);
+            if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+                throw new Error("Database not set up. Please run: supabase db push");
+            } else if (errorMessage.includes('JWT') || errorMessage.includes('auth')) {
+                throw new Error("Authentication issue. Please sign in again.");
+            } else {
+                throw new Error(`Failed to sync API key: ${errorMessage}`);
+            }
+        }
+    }
+
     // Subscribe to real-time changes
     subscribeToTasks(userId: string, callback: (payload: any) => void) {
         return supabase
@@ -345,6 +446,43 @@ class SyncService {
                 callback
             )
             .subscribe();
+    }
+
+    // Test database connection and table existence
+    async testDatabaseConnection(): Promise<{ success: boolean; message: string }> {
+        try {
+            // Test basic connection
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id")
+                .limit(1);
+
+            if (error) {
+                return { success: false, message: `Database connection failed: ${error.message}` };
+            }
+
+            // Test user_settings table
+            const { error: settingsError } = await supabase
+                .from("user_settings")
+                .select("id")
+                .limit(1);
+
+            if (settingsError) {
+                if (settingsError.message.includes('relation') && settingsError.message.includes('does not exist')) {
+                    return { success: false, message: "user_settings table not found. Click 'Fix DB' to create it." };
+                }
+                return { success: false, message: `user_settings table error: ${settingsError.message}` };
+            }
+
+            return { success: true, message: "Database connection and tables OK" };
+        } catch (error: any) {
+            return { success: false, message: `Connection test failed: ${error.message}` };
+        }
+    }
+
+    // Create user_settings table directly (simplified approach)
+    async createUserSettingsTable(): Promise<void> {
+        throw new Error("Please create the table manually. Go to Supabase Dashboard > SQL Editor and run the SQL from create_user_settings_table.sql file");
     }
 
     // Migrate localStorage data to cloud

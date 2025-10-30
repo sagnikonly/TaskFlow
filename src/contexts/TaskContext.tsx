@@ -53,6 +53,7 @@ interface TaskContextType {
     stepUpStats: { totalStepUps: number; activeStepUps: number; completedStepUps: number };
     heatMapData: { date: string; count: number }[];
   };
+  checkRecurringTasksManually: () => Promise<number>;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -84,24 +85,24 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         } else {
           console.log("📦 No tasks found in localStorage");
         }
-        
+
         const savedCategories = localStorage.getItem("categories");
         if (savedCategories) {
           setCategories(JSON.parse(savedCategories));
         }
-        
+
         const savedIcons = localStorage.getItem("categoryIcons");
         if (savedIcons) {
           setCategoryIcons(JSON.parse(savedIcons));
         }
-        
+
         setIsLoading(false);
         return;
       }
 
       try {
         setIsLoading(true);
-        
+
         // First, load from localStorage immediately for faster UI
         console.log("👤 User logged in, loading from localStorage first...");
         const saved = localStorage.getItem("tasks");
@@ -117,22 +118,22 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         } else {
           console.log("📦 No tasks in localStorage");
         }
-        
+
         const savedCategories = localStorage.getItem("categories");
         if (savedCategories) {
           setCategories(JSON.parse(savedCategories));
         }
-        
+
         const savedIcons = localStorage.getItem("categoryIcons");
         if (savedIcons) {
           setCategoryIcons(JSON.parse(savedIcons));
         }
-        
+
         // Then sync with cloud in the background
         try {
           // Migrate local data to cloud if needed
           await syncService.migrateLocalDataToCloud(user.id);
-          
+
           // Sync from cloud
           const [cloudTasks, cloudCategories] = await Promise.all([
             syncService.syncTasksFromCloud(user.id),
@@ -142,11 +143,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
           setTasks(cloudTasks);
           setCategories(cloudCategories.categories);
           setCategoryIcons(cloudCategories.icons);
-          
+
           console.log(`✅ Data synced from cloud successfully (${cloudTasks.length} tasks)`);
         } catch (cloudError: any) {
           console.error("⚠️ Cloud sync failed, using local data:", cloudError);
-          
+
           // Check if it's a table not found error
           const errorMessage = cloudError?.message || String(cloudError);
           if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
@@ -166,7 +167,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
               duration: 3000,
             });
           }
-          
+
           // Keep the localStorage data we already loaded
           // If no localStorage data, set defaults
           if (!saved) {
@@ -182,7 +183,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error: any) {
         console.error("❌ Error initializing data:", error);
-        
+
         // Fall back to localStorage
         const saved = localStorage.getItem("tasks");
         if (saved) {
@@ -193,14 +194,14 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
             completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
           })));
         }
-        
+
         const savedCategories = localStorage.getItem("categories");
         if (savedCategories) {
           setCategories(JSON.parse(savedCategories));
         } else {
           setCategories(["Work", "Health", "Personal Growth", "Shopping", "Fitness"]);
         }
-        
+
         const savedIcons = localStorage.getItem("categoryIcons");
         if (savedIcons) {
           setCategoryIcons(JSON.parse(savedIcons));
@@ -227,7 +228,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
     const tasksSubscription = syncService.subscribeToTasks(user.id, (payload) => {
       console.log("Real-time task update:", payload);
-      
+
       if (payload.eventType === "INSERT") {
         const newTask = syncService.cloudToTask(payload.new);
         setTasks(prev => {
@@ -245,7 +246,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
     const categoriesSubscription = syncService.subscribeToCategories(user.id, async (payload) => {
       console.log("Real-time category update:", payload);
-      
+
       // Refresh categories from cloud
       try {
         const cloudCategories = await syncService.syncCategoriesFromCloud(user.id);
@@ -283,37 +284,194 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, [categoryIcons, isLoading]);
 
   useEffect(() => {
-    const checkRecurringTasks = () => {
+    const checkRecurringTasks = async () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
-      setTasks(prevTasks => 
-        prevTasks.map(task => {
-          if (!task.recurrence || task.recurrence === "none" || !task.completed) return task;
+
+      console.log("🔄 Checking recurring tasks for", today.toDateString());
+
+      const tasksToAdd: Task[] = [];
+
+      setTasks(prevTasks => {
+        const updatedTasks = [...prevTasks];
+        
+        // Get all unique recurring task templates (by title + category + recurrence)
+        const recurringTemplates = new Map();
+        
+        prevTasks.forEach(task => {
+          if (!task.recurrence || task.recurrence === "none") return;
           
-          const completedDate = task.completedAt ? new Date(task.completedAt) : null;
-          if (!completedDate) return task;
-          completedDate.setHours(0, 0, 0, 0);
+          const templateKey = `${task.title}-${task.category}-${task.recurrence}`;
           
-          if (completedDate.getTime() === today.getTime()) return task;
-          
-          const shouldReset = checkIfShouldRecur(task, today, completedDate);
-          if (shouldReset) {
-            return { ...task, completed: false, completedAt: undefined };
+          // Keep the earliest instance as the template
+          if (!recurringTemplates.has(templateKey) || 
+              new Date(task.createdAt) < new Date(recurringTemplates.get(templateKey).createdAt)) {
+            recurringTemplates.set(templateKey, task);
           }
-          return task;
-        })
-      );
+        });
+        
+        // For each recurring template, check if we need to create today's instance
+        recurringTemplates.forEach((template) => {
+          const templateDate = new Date(template.createdAt);
+          templateDate.setHours(0, 0, 0, 0);
+          
+          // For daily tasks, create new instance every day after the original
+          if (template.recurrence === "daily" && templateDate.getTime() < today.getTime()) {
+            // Check if we already have this task for today
+            const todayTaskExists = prevTasks.some(t => 
+              t.title === template.title && 
+              t.category === template.category && 
+              t.recurrence === template.recurrence &&
+              new Date(t.createdAt).toDateString() === today.toDateString()
+            );
+            
+            if (!todayTaskExists) {
+              console.log(`🔄 Creating new daily instance: ${template.title}`);
+              const newTodayTask = {
+                ...template,
+                id: crypto.randomUUID(), // New unique ID
+                completed: false,
+                completedAt: undefined,
+                createdAt: today, // Today's date
+                completionHistory: []
+              };
+              
+              tasksToAdd.push(newTodayTask);
+              updatedTasks.push(newTodayTask);
+            }
+          }
+          
+          // Handle weekly/monthly recurrence
+          else if (template.recurrence !== "daily") {
+            const shouldCreateToday = checkIfShouldRecur(template, today, templateDate);
+            
+            if (shouldCreateToday) {
+              const todayTaskExists = prevTasks.some(t => 
+                t.title === template.title && 
+                t.category === template.category && 
+                t.recurrence === template.recurrence &&
+                new Date(t.createdAt).toDateString() === today.toDateString()
+              );
+              
+              if (!todayTaskExists) {
+                console.log(`🔄 Creating new ${template.recurrence} instance: ${template.title}`);
+                const newTodayTask = {
+                  ...template,
+                  id: crypto.randomUUID(),
+                  completed: false,
+                  completedAt: undefined,
+                  createdAt: today,
+                  completionHistory: []
+                };
+                
+                tasksToAdd.push(newTodayTask);
+                updatedTasks.push(newTodayTask);
+              }
+            }
+          }
+        });
+        
+        return updatedTasks;
+      });
+
+      // Clean up completed tasks at midnight (when new daily tasks are created)
+      if (tasksToAdd.length > 0) {
+        console.log("🧹 Cleaning up completed tasks at midnight...");
+        
+        setTasks(prevTasks => {
+          const tasksToDelete: string[] = [];
+          
+          const filteredTasks = prevTasks.filter(task => {
+            // Keep incomplete tasks
+            if (!task.completed) return true;
+            
+            // Keep completed tasks from today
+            const taskDate = new Date(task.createdAt);
+            taskDate.setHours(0, 0, 0, 0);
+            if (taskDate.getTime() === today.getTime()) return true;
+            
+            // Remove completed tasks from previous days
+            console.log(`🗑️ Removing completed task: ${task.title}`);
+            tasksToDelete.push(task.id);
+            return false;
+          });
+          
+          // Sync deletions to cloud
+          if (user && tasksToDelete.length > 0) {
+            tasksToDelete.forEach(async (taskId) => {
+              try {
+                await syncService.deleteTaskFromCloud(taskId, user.id);
+                console.log(`✅ Deleted completed task from cloud: ${taskId}`);
+              } catch (error) {
+                console.error(`❌ Failed to delete completed task from cloud: ${taskId}`, error);
+              }
+            });
+          }
+          
+          return filteredTasks;
+        });
+      }
+
+      // Sync new recurring tasks to cloud
+      if (user && tasksToAdd.length > 0) {
+        for (const task of tasksToAdd) {
+          try {
+            await syncService.addTaskToCloud(task, user.id);
+            console.log(`✅ Synced new recurring task to cloud: ${task.title}`);
+          } catch (error) {
+            console.error(`❌ Failed to sync new recurring task: ${task.title}`, error);
+          }
+        }
+      }
     };
 
+    // Check immediately on mount
     checkRecurringTasks();
-    const interval = setInterval(checkRecurringTasks, 60000);
+
+    // Check every hour (more frequent than daily)
+    const interval = setInterval(checkRecurringTasks, 60 * 60 * 1000); // 1 hour
+
     return () => clearInterval(interval);
+  }, [user]); // Add user dependency to re-run when user changes
+
+  // Check for date changes (when user opens app on a new day)
+  useEffect(() => {
+    const checkDateChange = () => {
+      const today = new Date().toDateString();
+      const lastCheck = localStorage.getItem('lastRecurrenceCheck');
+
+      if (lastCheck !== today) {
+        console.log('📅 New day detected, checking recurring tasks');
+        localStorage.setItem('lastRecurrenceCheck', today);
+
+        // Trigger recurrence check after a short delay to ensure tasks are loaded
+        setTimeout(() => {
+          const event = new CustomEvent('checkRecurringTasks');
+          window.dispatchEvent(event);
+        }, 1000);
+      }
+    };
+
+    // Check on app startup
+    checkDateChange();
+
+    // Check when app becomes visible (user returns to app)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkDateChange();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const checkIfShouldRecur = (task: Task, today: Date, completedDate: Date): boolean => {
     const daysDiff = Math.floor((today.getTime() - completedDate.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     switch (task.recurrence) {
       case "daily":
         return daysDiff >= 1;
@@ -332,7 +490,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const addTask = async (task: Omit<Task, "id" | "createdAt">) => {
     // Generate a unique ID for the task (UUID format for cloud compatibility)
     const taskId = crypto.randomUUID();
-    
+
     const newTask: Task = {
       ...task,
       id: taskId,
@@ -340,9 +498,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       completionHistory: task.completionHistory || [],
       recurrence: task.recurrence || "none",
     };
-    
+
     setTasks((prev) => [newTask, ...prev]);
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -361,7 +519,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, ...updates } : task))
     );
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -374,7 +532,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteTask = async (id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -395,7 +553,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       ...(task.completionHistory || []),
       { date: today, completed: newCompleted }
     ];
-    
+
     const updates = {
       completed: newCompleted,
       completedAt: newCompleted ? new Date() : undefined,
@@ -405,7 +563,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -427,7 +585,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       ...(task.completionHistory || []),
       { date: today, completed: true }
     ] : task.completionHistory;
-    
+
     const updates = {
       count: { ...task.count, current: newCurrent },
       completed: isComplete,
@@ -438,7 +596,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -463,15 +621,15 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
       // Extract unique categories from imported tasks
       const importedCategories = [...new Set(normalizedTasks.map(t => t.category))];
-      
+
       if (mergeMode === "replace") {
         // Replace all tasks
         setTasks(normalizedTasks);
-        
+
         // Update categories
         const newCategories = [...new Set([...categories, ...importedCategories])];
         setCategories(newCategories);
-        
+
         // Sync to cloud if user is logged in
         if (user) {
           // Delete all existing tasks
@@ -488,7 +646,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         const existingIds = new Set(tasks.map(t => t.id));
         const tasksToAdd = normalizedTasks.filter(t => !existingIds.has(t.id));
         const tasksToUpdate = normalizedTasks.filter(t => existingIds.has(t.id));
-        
+
         setTasks(prev => {
           const updated = prev.map(task => {
             const importedTask = tasksToUpdate.find(t => t.id === task.id);
@@ -496,11 +654,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
           });
           return [...updated, ...tasksToAdd];
         });
-        
+
         // Update categories
         const newCategories = [...new Set([...categories, ...importedCategories])];
         setCategories(newCategories);
-        
+
         // Sync to cloud if user is logged in
         if (user) {
           for (const task of tasksToAdd) {
@@ -511,7 +669,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       }
-      
+
       toast.success(`Successfully imported ${normalizedTasks.length} tasks!`);
     } catch (error) {
       console.error("Error importing tasks:", error);
@@ -524,7 +682,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (!categories.includes(category)) {
       setCategories((prev) => [...prev, category]);
       setCategoryIcons(prev => ({ ...prev, [category]: icon }));
-      
+
       // Sync to cloud if user is logged in
       if (user) {
         try {
@@ -544,7 +702,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       return newIcons;
     });
     setTasks(prev => prev.filter(task => task.category !== category));
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -557,7 +715,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   const updateCategoryIcon = async (category: string, icon: string) => {
     setCategoryIcons(prev => ({ ...prev, [category]: icon }));
-    
+
     // Sync to cloud if user is logged in
     if (user) {
       try {
@@ -605,7 +763,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split("T")[0];
-      
+
       let count = 0;
       tasks.forEach((task) => {
         if (task.completionHistory) {
@@ -616,7 +774,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
           });
         }
       });
-      
+
       heatMapData.push({ date: dateStr, count });
     }
 
@@ -648,6 +806,119 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         removeCategory,
         updateCategoryIcon,
         getTaskStats,
+        checkRecurringTasksManually: async () => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          console.log("🔄 Manual recurring tasks check for", today.toDateString());
+
+          const tasksToAdd: Task[] = [];
+
+          setTasks(prevTasks => {
+            const updatedTasks = [...prevTasks];
+
+            // Get all unique recurring task templates
+            const recurringTemplates = new Map();
+
+            prevTasks.forEach(task => {
+              if (!task.recurrence || task.recurrence === "none") return;
+
+              const templateKey = `${task.title}-${task.category}-${task.recurrence}`;
+
+              // Keep the earliest instance as the template
+              if (!recurringTemplates.has(templateKey) ||
+                  new Date(task.createdAt) < new Date(recurringTemplates.get(templateKey).createdAt)) {
+                recurringTemplates.set(templateKey, task);
+              }
+            });
+
+            // For each recurring template, check if we need to create today's instance
+            recurringTemplates.forEach((template) => {
+              const templateDate = new Date(template.createdAt);
+              templateDate.setHours(0, 0, 0, 0);
+
+              // For daily tasks, create new instance every day after the original
+              if (template.recurrence === "daily" && templateDate.getTime() < today.getTime()) {
+                // Check if we already have this task for today
+                const todayTaskExists = prevTasks.some(t =>
+                  t.title === template.title &&
+                  t.category === template.category &&
+                  t.recurrence === template.recurrence &&
+                  new Date(t.createdAt).toDateString() === today.toDateString()
+                );
+
+                if (!todayTaskExists) {
+                  console.log(`🔄 Manually creating new daily instance: ${template.title}`);
+                  const newTodayTask = {
+                    ...template,
+                    id: crypto.randomUUID(),
+                    completed: false,
+                    completedAt: undefined,
+                    createdAt: today,
+                    completionHistory: []
+                  };
+
+                  tasksToAdd.push(newTodayTask);
+                  updatedTasks.push(newTodayTask);
+                }
+              }
+            });
+
+            return updatedTasks;
+          });
+
+          // Clean up completed tasks when creating new daily tasks
+          if (tasksToAdd.length > 0) {
+            console.log("🧹 Manually cleaning up completed tasks...");
+
+            setTasks(prevTasks => {
+              const tasksToDelete: string[] = [];
+
+              const filteredTasks = prevTasks.filter(task => {
+                // Keep incomplete tasks
+                if (!task.completed) return true;
+
+                // Keep completed tasks from today
+                const taskDate = new Date(task.createdAt);
+                taskDate.setHours(0, 0, 0, 0);
+                if (taskDate.getTime() === today.getTime()) return true;
+
+                // Remove completed tasks from previous days
+                console.log(`🗑️ Manually removing completed task: ${task.title}`);
+                tasksToDelete.push(task.id);
+                return false;
+              });
+
+              // Sync deletions to cloud
+              if (user && tasksToDelete.length > 0) {
+                tasksToDelete.forEach(async (taskId) => {
+                  try {
+                    await syncService.deleteTaskFromCloud(taskId, user.id);
+                    console.log(`✅ Manually deleted completed task from cloud: ${taskId}`);
+                  } catch (error) {
+                    console.error(`❌ Failed to manually delete completed task from cloud: ${taskId}`, error);
+                  }
+                });
+              }
+
+              return filteredTasks;
+            });
+          }
+
+          // Sync new recurring tasks to cloud
+          if (user && tasksToAdd.length > 0) {
+            for (const task of tasksToAdd) {
+              try {
+                await syncService.addTaskToCloud(task, user.id);
+                console.log(`✅ Manually synced new recurring task to cloud: ${task.title}`);
+              } catch (error) {
+                console.error(`❌ Failed to manually sync new recurring task: ${task.title}`, error);
+              }
+            }
+          }
+
+          return tasksToAdd.length;
+        },
       }}
     >
       {children}

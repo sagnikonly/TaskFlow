@@ -216,6 +216,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          confetti_enabled: boolean | null
+          created_at: string | null
+          gemini_api_key: string | null
+          haptics_enabled: boolean | null
+          haptics_intensity: string | null
+          id: string
+          notifications_enabled: boolean | null
+          theme: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          confetti_enabled?: boolean | null
+          created_at?: string | null
+          gemini_api_key?: string | null
+          haptics_enabled?: boolean | null
+          haptics_intensity?: string | null
+          id?: string
+          notifications_enabled?: boolean | null
+          theme?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          confetti_enabled?: boolean | null
+          created_at?: string | null
+          gemini_api_key?: string | null
+          haptics_enabled?: boolean | null
+          haptics_intensity?: string | null
+          id?: string
+          notifications_enabled?: boolean | null
+          theme?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
